@@ -8,7 +8,7 @@ WORKDIR /github/workspace
 COPY . /github/workspace
 
 # Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r /github/workspace/requirements.txt
 
 # Command to run the script
 CMD ["python", "/github/workspace/.github/scripts/spam_detector.py"]
