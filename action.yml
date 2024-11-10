@@ -1,10 +1,6 @@
 name: AutoHide Spam Comments
 description: This action detects and hides spam comments in discussions, issues, and pull requests.
 
-branding:
-  icon: shield
-  color: blue
-
 inputs:
   github_token:
     description: 'GitHub Token to authenticate and interact with the API.'
@@ -17,5 +13,9 @@ inputs:
     required: true
 
 runs:
-  using: 'python'
-  main: '.github/scripts/spam_detector.py'
+  using: 'docker'
+  image: 'Dockerfile'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
