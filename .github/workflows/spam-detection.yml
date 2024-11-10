@@ -9,10 +9,10 @@ on:
     types: [created]
 
 permissions:
-  issues: write  # Allows the action to read and write issues comments
-  pull-requests: write  # Allows the action to read and write pull request comments
-  discussions: write  # Allows the action to read and write discussion comments
-  contents: read  # Allows access to the repository contents
+  issues: write
+  pull-requests: write
+  discussions: write
+  contents: read
 
 jobs:
   detect-spam:
@@ -30,18 +30,19 @@ jobs:
       - name: Cache Python dependencies
         uses: actions/cache@v3
         with:
-          path: ~/.cache/pip  # Caches pip packages
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}  # Unique key based on OS and requirements file
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt  # Install packages listed in a requirements file
+          pip install -r requirements.txt
 
       - name: Run Spam Detection
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python .github/scripts/spam_detector.py
+        uses: Sambhaji-Patil/spam-detection-action@v1  # Use the correct version or tag
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          repo_owner: ${{ github.repository_owner }}
+          repo_name: ${{ github.repository }}

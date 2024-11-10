@@ -1,6 +1,7 @@
 import joblib
 import requests
 import os
+import sys
 
 GITHUB_API_URL = "https://api.github.com/graphql"
 
@@ -130,7 +131,13 @@ def moderate_comments(owner, repo, token):
     print(spam_results)
 
 if __name__ == "__main__":
-    OWNER = "Sambhaji-Patil"  # Replace with the repository owner
-    REPO = "spam-filter-v1"  # Replace with the repository name
-    TOKEN = os.getenv('GITHUB_TOKEN')  # Ensure this is set in your GitHub Actions environment
+    # Get the arguments passed from the GitHub Actions workflow
+    if len(sys.argv) != 4:
+        print("Usage: python spam_detector.py <repo_owner> <repo_name> <github_token>")
+        sys.exit(1)
+
+    OWNER = sys.argv[1]
+    REPO = sys.argv[2]
+    TOKEN = sys.argv[3]
+
     moderate_comments(OWNER, REPO, TOKEN)
