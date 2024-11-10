@@ -1,4 +1,4 @@
-name: Spam Detection
+name: AutoHide Spam Commments
 description: This action detects and hides spam comments in discussions, issues, and pull requests.
 
 inputs:
