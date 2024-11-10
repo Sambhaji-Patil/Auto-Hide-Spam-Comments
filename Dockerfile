@@ -11,4 +11,4 @@ COPY . /app
 RUN pip install -r requirements.txt
 
 # Run the script
-CMD ["python", ".github/scripts/spam_detector.py"]
+CMD ["python", "/github/workspace/.github/scripts/spam_detector.py"]
