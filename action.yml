@@ -1,5 +1,9 @@
-name: AutoHide Spam Commments
+name: AutoHide Spam Comments
 description: This action detects and hides spam comments in discussions, issues, and pull requests.
+
+branding:
+  icon: shield
+  color: blue
 
 inputs:
   github_token:
