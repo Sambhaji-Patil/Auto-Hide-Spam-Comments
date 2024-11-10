@@ -15,6 +15,10 @@ inputs:
 runs:
   using: 'docker'
   image: 'Dockerfile'
+  args:
+    - ${{ inputs.github_token }}
+    - ${{ inputs.repo_owner }}
+    - ${{ inputs.repo_name }}
 
 branding:
   icon: 'shield'
