@@ -41,9 +41,8 @@ jobs:
         pip install -r requirements.txt
 
     - name: Run Spam Detection
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-      run: |
-        python spam_detector.py
+      uses: ./.github/actions/spam-detection-action
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        repo-owner: ${{ github.repository_owner }}
+        repo-name: ${{ github.repository }}
