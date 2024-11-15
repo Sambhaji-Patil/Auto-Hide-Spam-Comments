@@ -41,8 +41,5 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Spam Detection
-        uses: Sambhaji-Patil/spam-detection-action@v1.4  # Use the correct version or tag
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          repo_owner: ${{ github.repository_owner }}
-          repo_name: ${{ github.repository }}
+        run: |
+          python spam_detector.py ${{ github.repository_owner }} ${{ github.repository }} ${{ secrets.GITHUB_TOKEN }}
