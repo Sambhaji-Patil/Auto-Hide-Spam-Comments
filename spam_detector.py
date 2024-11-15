@@ -85,9 +85,12 @@ def detect_spam(comment_body):
     model = joblib.load("spam_detector_model.pkl")  # Load new model pipeline directly
     return model.predict([comment_body])[0] == 1
 
-def moderate_comments(owner, repo, token):
+def moderate_comments():
+    github_token = os.getenv("INPUT_GITHUB_TOKEN")
+    repo_owner = os.getenv("INPUT_REPO_OWNER")
+    repo_name = os.getenv("INPUT_REPO_NAME")
     headers = {
-        'Authorization': f'Bearer {token}',
+        'Authorization': f'Bearer {github_token}',
         'Content-Type': 'application/json'
     }
     
@@ -98,7 +101,7 @@ def moderate_comments(owner, repo, token):
         latest_cursor = None
         try:
             while True:
-                data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
+                data = fetch_comments(repo_owner, repo_name, headers, latest_cursor, comment_type=comment_type)
                 for entity in data['data']['repository'][comment_type + "s"]['edges']:
                     for comment_edge in entity['node']['comments']['edges']:
                         comment_id = comment_edge['node']['id']
@@ -131,13 +134,4 @@ def moderate_comments(owner, repo, token):
     print(spam_results)
 
 if __name__ == "__main__":
-    # Get the arguments passed from the GitHub Actions workflow
-    if len(sys.argv) != 4:
-        print("Usage: python spam_detector.py <repo_owner> <repo_name> <github_token>")
-        sys.exit(1)
-
-    OWNER = sys.argv[1]
-    REPO = sys.argv[2]
-    TOKEN = sys.argv[3]
-
-    moderate_comments(OWNER, REPO, TOKEN)
+    moderate_comments()
