@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Spam Detection Action
-        uses: Sambhaji-Patil/spam-detection-action@v1.0
+        uses: Sambhaji-Patil/spam-detection-action@v1.5
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           repo_owner: 'your-github-username'
