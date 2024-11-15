@@ -11,4 +11,4 @@ COPY . /github/workspace
 RUN pip install --no-cache-dir -r /github/workspace/requirements.txt
 
 # Command to run the script
-CMD ["python", "/github/workspace/.github/scripts/spam_detector.py"]
+CMD ["python", "/github/workspace/spam_detector.py"]
