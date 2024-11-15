@@ -10,7 +10,7 @@ on:
 
 permissions:
   issues: write
-  pull-requests: write
+  pull-requests: write 
   discussions: write
   contents: read
 
@@ -19,27 +19,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out the repository
-        uses: actions/checkout@v3
+    - name: Check out the repository
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
 
-      - name: Cache Python dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-      - name: Run Spam Detection
-        run: |
-          python spam_detector.py ${{ github.repository_owner }} ${{ github.repository }} ${{ secrets.GITHUB_TOKEN }}
+    - name: Run Spam Detection
+      uses: Sambhaji-Patil/spam-detection-action@v1.5
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        repo_owner: ${{ github.repository_owner }}
+        repo_name: ${{ github.repository }}
