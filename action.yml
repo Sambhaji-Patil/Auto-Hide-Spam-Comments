@@ -1,0 +1,21 @@
+name: AutoHide Spam Comments
+description: This action detects and hides spam comments in discussions, issues, and pull requests.
+
+inputs:
+  github_token:
+    description: 'GitHub Token to authenticate and interact with the API.'
+    required: true
+  repo_owner:
+    description: 'The repository owner (e.g., user or organization).'
+    required: true
+  repo_name:
+    description: 'The repository name (e.g., "spam-filter").'
+    required: true
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
