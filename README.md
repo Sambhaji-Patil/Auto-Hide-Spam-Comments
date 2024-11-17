@@ -23,7 +23,6 @@ To use this action in your repository, add the following to your workflow file (
 
 ## Select Any 1 from the workflows below 
 ### Workflow 1: This will work every time a new comment is commented in Issues/Discussions/Pull Requests.
-```markdown
 ```yaml
 name: Spam Detection
 
@@ -65,7 +64,6 @@ The cron expression 0 * * * * represents:
 ## Use below types and replace in the main code above
 
 ### Workflow 2: This will work every 3 hours.
-```markdown
 ```yaml
 name: Spam Detection
 
@@ -77,7 +75,6 @@ on:
 ```
 
 ### Workflow 3: This will work every day at 9AM.
-```markdown
 ```yaml
 name: Spam Detection
 
@@ -89,19 +86,16 @@ on:
 ```
 
 ### Workflow 4: Every weekday (Monday-Friday) at 5 PM
-```markdown
 ```yaml
 name: Spam Detection
 
 on:
   schedule:
     - cron: '0 17 * * 1-5'  # Every weekday (Monday-Friday) at 5 PM
-  workflow_dispatch: # Allows you to manually trigger the workflow as needed. 
-
+  workflow_dispatch: # Allows you to manually trigger the workflow as needed.
 ```
 
 ### Workflow 5: First day of every month at 2 AM
-```markdown
 ```yaml
 name: Spam Detection
 
@@ -113,7 +107,6 @@ on:
 ```
 
 ### Workflow 6: Run every Monday at 9:00 AM
-```markdown
 ```yaml
 name: Spam Detection
 
