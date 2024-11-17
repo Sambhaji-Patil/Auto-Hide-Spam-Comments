@@ -1,0 +1,11 @@
+name: "AutoHide Spam Comments"
+description: "Detects and hides spam comments in GitHub issues, discussions, and pull requests."
+author: "Sambhaji Patil"
+
+runs:
+  using: "docker"
+  image: "Dockerfile"
+
+branding:
+  icon: "shield"
+  color: "red"
