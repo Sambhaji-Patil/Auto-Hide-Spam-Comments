@@ -45,10 +45,24 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3  
+
+      - name: Restore Cache
+        uses: actions/cache@v3
+        with:
+          path: .github/cache
+          key: cursor-cache
+
       - name: Spam Detection
         uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.0 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURSOR_FILE: .github/cache/last_cursor.txt
+
+      - name: Save Cache
+        uses: actions/cache@v3
+        with:
+          path: .github/cache
+          key: cursor-cache
 ```
 
 ## Cron Expression Customization:
