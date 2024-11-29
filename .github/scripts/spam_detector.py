@@ -4,6 +4,20 @@ import os
 
 GITHUB_API_URL = "https://api.github.com/graphql"
 
+#cursor-cache-addition
+def read_last_cursor(cursor_file):
+    try:
+        with open(cursor_file, "r") as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        return None
+    
+#cursor-cache-addition
+def save_last_cursor(cursor_file, cursor):
+    os.makedirs(os.path.dirname(cursor_file), exist_ok=True)
+    with open(cursor_file, "w") as file:
+        file.write(cursor)
+
 def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discussion"):
     if comment_type == "discussion":
         query_field = "discussions"
@@ -84,6 +98,7 @@ def detect_spam(comment_body):
     model = joblib.load("/app/spam_detector_model.pkl")  # Load new model pipeline directly
     return model.predict([comment_body])[0] == 1
 
+#added some changes -cache-cursor
 def moderate_comments(owner, repo, token):
     headers = {
         'Authorization': f'Bearer {token}',
@@ -93,8 +108,9 @@ def moderate_comments(owner, repo, token):
     spam_results = []
     comment_types = ["discussion", "issue", "pullRequest"]
 
+    cursor_file = os.getenv("CURSOR_FILE", "last_cursor.txt")
     for comment_type in comment_types:
-        latest_cursor = None
+        latest_cursor = read_last_cursor(cursor_file)
         try:
             while True:
                 data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
@@ -104,16 +120,12 @@ def moderate_comments(owner, repo, token):
                         comment_body = comment_edge['node']['body']
                         is_minimized = comment_edge['node']['isMinimized']
 
-                        # Debugging outputs
-                        print(f"Processing {comment_type} comment:", comment_body)
-                        print("Is Minimized:", is_minimized)
-                        print("Is Spam:", detect_spam(comment_body))
-
                         if not is_minimized and detect_spam(comment_body):
-                            hidden = minimize_comment(comment_id, headers)
-                            spam_results.append({"id": comment_id, "hidden": hidden})
+                            minimize_comment(comment_id, headers)
+                            spam_results.append({"id": comment_id})
 
                         latest_cursor = comment_edge['cursor']
+                        save_last_cursor(cursor_file, latest_cursor)
 
                     page_info = entity['node']['comments']['pageInfo']
                     if not page_info['hasNextPage']:
@@ -121,13 +133,11 @@ def moderate_comments(owner, repo, token):
 
                 if not data['data']['repository'][comment_type + "s"]['pageInfo']['hasNextPage']:
                     break
-                latest_cursor = data['data']['repository'][comment_type + "s"]['pageInfo']["endCursor"]
         
         except Exception as e:
-            print(f"Error processing {comment_type}s: " + str(e))
-    
-    print("Moderation Results:")
-    print(spam_results)
+            print(f"Error processing {comment_type}s: {e}")
+
+    print("Moderation Results:", spam_results)
 
 if __name__ == "__main__":
     OWNER = os.environ.get("GITHUB_REPOSITORY_OWNER") 
