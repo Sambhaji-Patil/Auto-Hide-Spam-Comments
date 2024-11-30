@@ -40,12 +40,31 @@ jobs:
       pull-requests: write
       discussions: write
       contents: read 
+      actions: write  # Important: needed for cache access
     steps:
-      - uses: actions/checkout@v3  
+      - uses: actions/checkout@v3
+      
+      # Restore cursor cache before running the spam detection
+      - name: Restore Cursor Cache
+        uses: actions/cache/restore@v3
+        id: restore-cursor
+        with:
+          path: /tmp/cursor_cache.json
+          key: ${{ runner.os }}-spam-detection-cursor
+          restore-keys: |
+            ${{ runner.os }}-spam-detection-cursor
+      
       - name: Spam Detection
         uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      # Save cursor cache after running spam detection
+      - name: Save Cursor Cache
+        uses: actions/cache/save@v3
+        with:
+          path: /tmp/cursor_cache.json
+          key: ${{ runner.os }}-spam-detection-cursor-${{ github.sha }}
 ```
 
 ## Cron Expression Customization:

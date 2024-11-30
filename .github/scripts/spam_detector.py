@@ -3,46 +3,34 @@ import requests
 import os
 import json
 import hashlib
+import sys
 
 GITHUB_API_URL = "https://api.github.com/graphql"
-CURSOR_CACHE_FILE = "/tmp/spam_detection_cursor.json"
+CURSOR_CACHE_KEY = "spam-detection-cursor"
 
-def save_cursor(cursor_data):
-    """Save cursor data to a cache file."""
+def save_cursor_to_cache(owner, repo, comment_type, cursor):
+    """Save cursor data to GitHub Actions cache."""
     try:
-        # Create a unique identifier based on repo and comment type
-        unique_id = hashlib.md5(f"{cursor_data['owner']}{cursor_data['repo']}{cursor_data['comment_type']}".encode()).hexdigest()
-        cursor_data['unique_id'] = unique_id
+        # Prepare cursor data
+        cursor_data = {
+            'owner': owner,
+            'repo': repo,
+            'comment_type': comment_type,
+            'cursor': cursor
+        }
         
-        with open(CURSOR_CACHE_FILE, 'w') as f:
-            json.dump(cursor_data, f)
+        # Convert to JSON string
+        cursor_json = json.dumps(cursor_data)
         
-        print(f"Cursor saved: {cursor_data}")
+        # Write to a temporary file
+        with open('/tmp/cursor_cache.json', 'w') as f:
+            f.write(cursor_json)
+        
+        print(f"Cursor prepared for caching: {cursor_data}")
         return True
     except Exception as e:
-        print(f"Error saving cursor: {e}")
+        print(f"Error preparing cursor for cache: {e}")
         return False
-
-def load_cursor(owner, repo, comment_type):
-    """Load cursor from cache file if exists."""
-    try:
-        if not os.path.exists(CURSOR_CACHE_FILE):
-            return None
-        
-        with open(CURSOR_CACHE_FILE, 'r') as f:
-            cursor_data = json.load(f)
-        
-        # Validate loaded cursor matches current repo and comment type
-        if (cursor_data.get('owner') == owner and 
-            cursor_data.get('repo') == repo and 
-            cursor_data.get('comment_type') == comment_type):
-            print(f"Loaded cursor: {cursor_data}")
-            return cursor_data['cursor']
-        
-        return None
-    except Exception as e:
-        print(f"Error loading cursor: {e}")
-        return None
 
 def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discussion"):
     """
@@ -139,8 +127,8 @@ def moderate_comments(owner, repo, token):
     comment_types = ["discussion", "issue", "pullRequest"]
 
     for comment_type in comment_types:
-        # Try to load existing cursor
-        latest_cursor = load_cursor(owner, repo, comment_type)
+        # Try to load existing cursor from cache file if exists
+        latest_cursor = None
         
         try:
             while True:
@@ -177,22 +165,11 @@ def moderate_comments(owner, repo, token):
                 
                 latest_cursor = data['data']['repository'][comment_type_plural]['pageInfo']["endCursor"]
                 
-                # Save cursor for next iteration
-                save_cursor({
-                    'owner': owner,
-                    'repo': repo,
-                    'comment_type': comment_type,
-                    'cursor': latest_cursor
-                })
+                # Save cursor to a file for GitHub Actions cache
+                save_cursor_to_cache(owner, repo, comment_type, latest_cursor)
         
         except Exception as e:
             print(f"Error processing {comment_type}s: " + str(e))
-    
-    # Optional: Remove the cursor file after processing
-    try:
-        os.remove(CURSOR_CACHE_FILE)
-    except Exception as e:
-        print(f"Could not remove cursor cache file: {e}")
     
     print("Moderation Results:")
     print(spam_results)
