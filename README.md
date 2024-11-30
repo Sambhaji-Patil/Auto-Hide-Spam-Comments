@@ -50,7 +50,7 @@ jobs:
         run: mkdir -p .github/cursor_storage
 
       - name: Spam Detection
-        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.1
+        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURSOR_DIR: .github/cursor_storage
