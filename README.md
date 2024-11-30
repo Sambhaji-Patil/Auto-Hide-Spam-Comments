@@ -46,23 +46,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3  
 
-      - name: Restore Cache
-        uses: actions/cache@v3
-        with:
-          path: .github/cache
-          key: cursor-cache
+      - name: Set Up Cursor Directory
+        run: mkdir -p .github/cursor_storage
 
       - name: Spam Detection
-        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.1 
+        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURSOR_FILE: .github/cache/last_cursor.txt
+          CURSOR_DIR: .github/cursor_storage
 
-      - name: Save Cache
-        uses: actions/cache@v3
-        with:
-          path: .github/cache
-          key: cursor-cache
 ```
 
 ## Cron Expression Customization:
