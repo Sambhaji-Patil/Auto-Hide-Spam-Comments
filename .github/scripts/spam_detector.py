@@ -96,7 +96,11 @@ def get_cursor_file(cursor_dir):
         return cursor_dir_path / "last_cursor.txt"
 
 def save_cursor(cursor, cursor_dir):
-    cursor_file_path = Path(cursor_dir) / f"last_cursor_{os.getenv('GITHUB_RUN_ID')}.txt"
+    cursor_dir_path = Path(cursor_dir)
+    # Ensure the directory exists
+    cursor_dir_path.mkdir(parents=True, exist_ok=True)
+
+    cursor_file_path = cursor_dir_path / f"last_cursor_{os.getenv('GITHUB_RUN_ID')}.txt"
     with open(cursor_file_path, "w") as f:
         f.write(cursor)
 
