@@ -1,9 +1,10 @@
 import joblib
 import requests
 import os
-from pathlib import Path
+import json
 
 GITHUB_API_URL = "https://api.github.com/graphql"
+CURSOR_FILE = ".github/spam_detector_cursor.txt"
 
 def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discussion"):
     if comment_type == "discussion":
@@ -55,6 +56,7 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
         "after": after_cursor,
     }
     response = requests.post(GITHUB_API_URL, headers=headers, json={"query": query, "variables": variables})
+    print("Fetch Comments Response:", response.json())  # Debugging line
     if response.status_code == 200:
         return response.json()
     else:
@@ -81,22 +83,21 @@ def minimize_comment(comment_id, headers):
         return False
 
 def detect_spam(comment_body):
-    model = joblib.load("/app/spam_detector_model.pkl")
+    model = joblib.load("/app/spam_detector_model.pkl")  # Load new model pipeline directly
     return model.predict([comment_body])[0] == 1
 
-def get_cursor_file(cursor_dir):
-    return Path(cursor_dir) / "last_cursor.txt"
+def load_cursor():
+    try:
+        with open(CURSOR_FILE, "r") as f:
+            cursors = json.load(f)
+            return cursors
+    except FileNotFoundError:
+        return {"discussion": None, "issue": None, "pullRequest": None}
 
-def read_cursor(cursor_file):
-    if cursor_file.exists():
-        with open(cursor_file, "r") as file:
-            return file.read().strip()
-    return None
+def save_cursor(cursors):
+    with open(CURSOR_FILE, "w") as f:
+        json.dump(cursors, f)
 
-def save_cursor(cursor, cursor_file):
-    cursor_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(cursor_file, "w") as file:
-        file.write(cursor)
 
 def moderate_comments(owner, repo, token):
     headers = {
@@ -104,25 +105,31 @@ def moderate_comments(owner, repo, token):
         'Content-Type': 'application/json'
     }
     
-    cursor_dir = "/app/.github/cache"
-    cursor_file = get_cursor_file(cursor_dir)
-    latest_cursor = read_cursor(cursor_file)
-
-    # Debug: Check if cursor exists
-    print(f"Latest cursor: {latest_cursor}")
-
-    if latest_cursor is None:
-        print("No cursor found, starting fresh.")
-
     spam_results = []
     comment_types = ["discussion", "issue", "pullRequest"]
+    cursors = load_cursor()  # Load cursors
 
     for comment_type in comment_types:
+        latest_cursor = cursors.get(comment_type)  # Use saved cursor
         try:
             while True:
                 data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
+                # Check if data is valid and contains the expected structure.
+                if not data or 'data' not in data or 'repository' not in data['data']:
+                    print(f"Invalid response data for {comment_type}: {data}")  # Add more specific debugging
+                    break  # Or handle the error differently
                 for entity in data['data']['repository'][comment_type + "s"]['edges']:
+                    # Similarly check for valid data here.
+                    if 'node' not in entity or 'comments' not in entity['node'] or 'edges' not in entity['node']['comments']:
+                        print(f"Invalid entity data for {comment_type}: {entity}")
+                        continue
+
                     for comment_edge in entity['node']['comments']['edges']:
+                        # and here..
+                        if 'node' not in comment_edge or 'id' not in comment_edge['node'] or 'body' not in comment_edge['node'] or 'isMinimized' not in comment_edge['node']:
+                            print(f"Invalid comment data for {comment_type}: {comment_edge}")
+                            continue
+
                         comment_id = comment_edge['node']['id']
                         comment_body = comment_edge['node']['body']
                         is_minimized = comment_edge['node']['isMinimized']
@@ -136,34 +143,39 @@ def moderate_comments(owner, repo, token):
                             hidden = minimize_comment(comment_id, headers)
                             spam_results.append({"id": comment_id, "hidden": hidden})
 
-                        # Update cursor
                         latest_cursor = comment_edge['cursor']
 
                     page_info = entity['node']['comments']['pageInfo']
                     if not page_info['hasNextPage']:
                         break
+                    cursors[comment_type] = page_info["endCursor"]  # Update cursor for current type after page
+                    save_cursor(cursors)
 
                 if not data['data']['repository'][comment_type + "s"]['pageInfo']['hasNextPage']:
-                    break
+                    cursors[comment_type] = data['data']['repository'][comment_type + "s"]['pageInfo']["endCursor"] # Final update
+                    save_cursor(cursors) # Save the final cursor for type
+                    break  # Exit the type loop
         
         except Exception as e:
             print(f"Error processing {comment_type}s: " + str(e))
-            break
     
-    # Save the latest cursor
-    if latest_cursor:
-        save_cursor(latest_cursor, cursor_file)
-
     print("Moderation Results:")
     print(spam_results)
 
 if __name__ == "__main__":
-    OWNER = os.environ.get("GITHUB_REPOSITORY_OWNER")
-    REPO = os.environ.get("GITHUB_REPOSITORY")
-    TOKEN = os.getenv('GITHUB_TOKEN')
+    OWNER = os.environ.get("GITHUB_REPOSITORY_OWNER") 
+    REPO = os.environ.get("GITHUB_REPOSITORY")          
+    TOKEN = os.getenv('GITHUB_TOKEN') 
     
-    if not OWNER or not REPO or not TOKEN:
-        print("Missing necessary environment variables.")
-        exit(1)
+    try:
+        repo_parts = os.environ.get("GITHUB_REPOSITORY").split("/")  
+        if len(repo_parts) == 2:  
+            OWNER = repo_parts[0]
+            REPO = repo_parts[1]
+        else:
+            raise ValueError("GITHUB_REPOSITORY environment variable is not in the expected 'owner/repo' format.")
+    except (AttributeError, ValueError) as e:
+        print(f"Error getting repository information: {e}")
+        exit(1)  
 
     moderate_comments(OWNER, REPO, TOKEN)

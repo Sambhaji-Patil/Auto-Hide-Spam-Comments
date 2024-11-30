@@ -32,7 +32,7 @@ on:
   pull_request_review_comment:
     types: [created]
   discussion_comment:
-    types: [created]
+    types: [created]  
 
 jobs:
   detect-spam:
@@ -41,44 +41,14 @@ jobs:
       issues: write
       pull-requests: write
       discussions: write
-      contents: read
+      contents: read 
 
     steps:
-      - uses: actions/checkout@v3  # Using the latest stable version of actions/checkout
-
-      - name: Restore Cache
-        id: restore_cache
-        uses: actions/cache@v3  # Using the latest stable version of actions/cache
-        with:
-          path: .github/cache
-          key: cursor-cache-${{ github.sha }}  # Unique key based on commit SHA to prevent caching issues
-          restore-keys: |
-            cursor-cache-
-
-      - name: Get Latest Cursor
-        run: |
-          mkdir -p .github/cache
-          if [ ! -f ".github/cache/last_cursor.txt" ]; then
-            echo "No previous cursor found. Starting fresh."
-            touch .github/cache/last_cursor.txt
-          fi
-
+      - uses: actions/checkout@v3  
       - name: Spam Detection
-        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2  # Release version 1.2 of your custom action
+        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURSOR_FILE: .github/cache/last_cursor.txt
-
-      - name: Remove Old Cache
-        run: |
-          rm -rf .github/cache
-
-      - name: Save New Cursor
-        uses: actions/cache@v3  # Using the latest stable version of actions/cache
-        with:
-          path: .github/cache
-          key: cursor-cache-${{ github.sha }}  # Unique key based on commit SHA for caching the new state
-
 ```
 
 ## Cron Expression Customization:
