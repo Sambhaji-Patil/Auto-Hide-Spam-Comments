@@ -2,20 +2,44 @@ import joblib
 import requests
 import os
 import json
+import glob
 
 GITHUB_API_URL = "https://api.github.com/graphql"
-CACHE_FILE = '.github/cursor_cache/cursor.json'
+CACHE_DIR = '.github/cursor_cache'
+CACHE_FILE = f'{CACHE_DIR}/cursor.json'
+
+def clean_old_caches():
+    """Remove all old cache files before saving new one"""
+    if os.path.exists(CACHE_DIR):
+        cache_files = glob.glob(f'{CACHE_DIR}/*')
+        for f in cache_files:
+            try:
+                os.remove(f)
+            except Exception as e:
+                print(f"Error removing old cache file {f}: {e}")
 
 def load_cursor():
     if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, 'r') as f:
-            return json.load(f)
+        try:
+            with open(CACHE_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading cursor cache: {e}")
     return {}
 
 def save_cursor(cursor_data):
-    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-    with open(CACHE_FILE, 'w') as f:
-        json.dump(cursor_data, f)
+    try:
+        # Clean old cache files first
+        clean_old_caches()
+        
+        # Create cache directory if it doesn't exist
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        
+        # Save new cache file
+        with open(CACHE_FILE, 'w') as f:
+            json.dump(cursor_data, f)
+    except Exception as e:
+        print(f"Error saving cursor cache: {e}")
 
 def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discussion"):
     if comment_type == "discussion":
