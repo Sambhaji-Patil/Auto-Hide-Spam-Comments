@@ -53,7 +53,7 @@ jobs:
           key: cursor-cache
 
       - name: Spam Detection
-        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.0 
+        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.1 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURSOR_FILE: .github/cache/last_cursor.txt
