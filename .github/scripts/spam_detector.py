@@ -2,11 +2,49 @@ import joblib
 import requests
 import os
 import json
+import hashlib
 
 GITHUB_API_URL = "https://api.github.com/graphql"
-CURSOR_FILE = os.path.join(os.environ['GITHUB_WORKSPACE'], ".github", "spam_detector_cursor.txt")
+CURSOR_CACHE_FILE = "/tmp/spam_detection_cursor.json"
 
-def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discussion"):
+def save_cursor(cursor_data):
+    """Save cursor data to a cache file."""
+    try:
+        # Create a unique identifier based on repo and comment type
+        unique_id = hashlib.md5(f"{cursor_data['owner']}{cursor_data['repo']}{cursor_data['comment_type']}".encode()).hexdigest()
+        cursor_data['unique_id'] = unique_id
+        
+        with open(CURSOR_CACHE_FILE, 'w') as f:
+            json.dump(cursor_data, f)
+        
+        print(f"Cursor saved: {cursor_data}")
+        return True
+    except Exception as e:
+        print(f"Error saving cursor: {e}")
+        return False
+
+def load_cursor(owner, repo, comment_type):
+    """Load cursor from cache file if exists."""
+    try:
+        if not os.path.exists(CURSOR_CACHE_FILE):
+            return None
+        
+        with open(CURSOR_CACHE_FILE, 'r') as f:
+            cursor_data = json.load(f)
+        
+        # Validate loaded cursor matches current repo and comment type
+        if (cursor_data.get('owner') == owner and 
+            cursor_data.get('repo') == repo and 
+            cursor_data.get('comment_type') == comment_type):
+            print(f"Loaded cursor: {cursor_data}")
+            return cursor_data['cursor']
+        
+        return None
+    except Exception as e:
+        print(f"Error loading cursor: {e}")
+        return None
+
+def fetch_comments(owner, repo, headers, comment_type="discussion", after_cursor=None):
     if comment_type == "discussion":
         query_field = "discussions"
         query_comments_field = "comments"
@@ -62,7 +100,6 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
     else:
         raise Exception(f"Query failed with code {response.status_code}. Response: {response.json()}")
 
-
 def minimize_comment(comment_id, headers):
     mutation = """
     mutation($commentId: ID!) {
@@ -83,66 +120,33 @@ def minimize_comment(comment_id, headers):
         print(f"Failed to minimize comment with ID {comment_id}. Status code: {response.status_code}")
         return False
 
-
 def detect_spam(comment_body):
-    model = joblib.load("/app/spam_detector_model.pkl")
+    model = joblib.load("/app/spam_detector_model.pkl")  # Load new model pipeline directly
     return model.predict([comment_body])[0] == 1
 
-
-def load_cursor():
-    try:
-        with open(CURSOR_FILE, "r") as f:
-            cursors = json.load(f)
-            return cursors
-    except FileNotFoundError:
-        return {"discussion": None, "issue": None, "pullRequest": None}
-
-def save_cursor(cursors):
-    with open(CURSOR_FILE, "w") as f:
-        json.dump(cursors, f)
-
-
 def moderate_comments(owner, repo, token):
-    print(f"CURSOR_FILE inside moderate_comments: {CURSOR_FILE}")  # Debug print
     headers = {
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json'
     }
-
+    
     spam_results = []
     comment_types = ["discussion", "issue", "pullRequest"]
-    cursors = load_cursor()
 
     for comment_type in comment_types:
-        latest_cursor = cursors.get(comment_type)
+        # Try to load existing cursor
+        latest_cursor = load_cursor(owner, repo, comment_type)
+        
         try:
             while True:
                 data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
-
-                # Data Validation (Improved)
-                if not data or 'data' not in data or 'repository' not in data['data'] or comment_type + "s" not in data['data']['repository']:
-                    print(f"Skipping {comment_type} due to invalid data.")
-                    break # breaks from the while True loop. Continues to the next comment_type if there are any more
-
-                if not data['data']['repository'][comment_type + "s"]['pageInfo']['hasNextPage']:
-                    break # Breaks from the while True loop to the next comment_type.
-
                 for entity in data['data']['repository'][comment_type + "s"]['edges']:
-                    # Entity Validation
-                    if 'node' not in entity or 'comments' not in entity['node'] or 'edges' not in entity['node']['comments']:
-                        print(f"Invalid entity data for {comment_type}: {entity}")
-                        continue # breaks from the entity loop to the next entity if available
-
                     for comment_edge in entity['node']['comments']['edges']:
-                        # Comment Validation
-                        if 'node' not in comment_edge or 'id' not in comment_edge['node'] or 'body' not in comment_edge['node'] or 'isMinimized' not in comment_edge['node']:
-                            print(f"Invalid comment data for {comment_type}: {comment_edge}")
-                            continue # breaks from the current comment loop to the next comment if available
-
                         comment_id = comment_edge['node']['id']
                         comment_body = comment_edge['node']['body']
                         is_minimized = comment_edge['node']['isMinimized']
 
+                        # Debugging outputs
                         print(f"Processing {comment_type} comment:", comment_body)
                         print("Is Minimized:", is_minimized)
                         print("Is Spam:", detect_spam(comment_body))
@@ -151,19 +155,35 @@ def moderate_comments(owner, repo, token):
                             hidden = minimize_comment(comment_id, headers)
                             spam_results.append({"id": comment_id, "hidden": hidden})
 
-                        latest_cursor = comment_edge['cursor'] # Only place where latest_cursor is updated
+                        latest_cursor = comment_edge['cursor']
 
-                # Update and save cursor after processing all comments on the current page:
-                cursors[comment_type] = latest_cursor if latest_cursor else data['data']['repository'][comment_type + "s"]['pageInfo']['endCursor']
-                save_cursor(cursors)
+                    page_info = entity['node']['comments']['pageInfo']
+                    if not page_info['hasNextPage']:
+                        break
 
-
+                if not data['data']['repository'][comment_type + "s"]['pageInfo']['hasNextPage']:
+                    break
+                latest_cursor = data['data']['repository'][comment_type + "s"]['pageInfo']["endCursor"]
+                
+                # Save cursor for next iteration
+                save_cursor({
+                    'owner': owner,
+                    'repo': repo,
+                    'comment_type': comment_type,
+                    'cursor': latest_cursor
+                })
+        
         except Exception as e:
             print(f"Error processing {comment_type}s: " + str(e))
-
+    
+    # Optional: Remove the cursor file after processing
+    try:
+        os.remove(CURSOR_CACHE_FILE)
+    except Exception as e:
+        print(f"Could not remove cursor cache file: {e}")
+    
     print("Moderation Results:")
     print(spam_results)
-
 
 if __name__ == "__main__":
     OWNER = os.environ.get("GITHUB_REPOSITORY_OWNER") 

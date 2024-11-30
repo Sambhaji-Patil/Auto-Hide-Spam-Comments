@@ -25,7 +25,6 @@ To use this action in your repository, add the following to your workflow file (
 ### Workflow 1: This will work every time a new comment is commented in Issues/Discussions/Pull Requests.
 ```yaml
 name: Spam Detection
-
 on:
   issue_comment:
     types: [created]
@@ -33,7 +32,6 @@ on:
     types: [created]
   discussion_comment:
     types: [created]  
-
 jobs:
   detect-spam:
     runs-on: ubuntu-latest
@@ -41,12 +39,9 @@ jobs:
       issues: write
       pull-requests: write
       discussions: write
-      contents: write 
-
+      contents: read 
     steps:
-      - uses: actions/checkout@v3 
-        with:
-          fetch-depth: 0 
+      - uses: actions/checkout@v3  
       - name: Spam Detection
         uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2 
         env:
