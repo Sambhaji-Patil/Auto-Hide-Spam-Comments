@@ -98,7 +98,6 @@ def save_cursor(cursor, cursor_file):
     with open(cursor_file, "w") as file:
         file.write(cursor)
 
-
 def moderate_comments(owner, repo, token):
     headers = {
         'Authorization': f'Bearer {token}',
@@ -108,6 +107,12 @@ def moderate_comments(owner, repo, token):
     cursor_dir = "/app/.github/cache"
     cursor_file = get_cursor_file(cursor_dir)
     latest_cursor = read_cursor(cursor_file)
+
+    # Debug: Check if cursor exists
+    print(f"Latest cursor: {latest_cursor}")
+
+    if latest_cursor is None:
+        print("No cursor found, starting fresh.")
 
     spam_results = []
     comment_types = ["discussion", "issue", "pullRequest"]

@@ -27,57 +27,52 @@ To use this action in your repository, add the following to your workflow file (
 name: Spam Detection
 
 on:
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
-  discussion_comment:
-    types: [created]
+  workflow_dispatch:
 
 jobs:
-  detect-spam:
+  moderate-comments:
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      pull-requests: write
-      discussions: write
-      contents: read
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Restore Cache
-        id: restore_cache
+      - name: Cache cursor file
         uses: actions/cache@v3
         with:
           path: .github/cache
-          key: cursor-cache
+          key: cursor-cache-${{ github.sha }}
           restore-keys: |
             cursor-cache-
+        continue-on-error: true
 
-      - name: Get Latest Cursor
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
         run: |
-          mkdir -p .github/cache
-          if [ ! -f ".github/cache/last_cursor.txt" ]; then
-            echo "No previous cursor found. Starting fresh."
-            touch .github/cache/last_cursor.txt
-          fi
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Spam Detection
-        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2
+      - name: Run spam moderation
+        run: |
+          python moderate_comments.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURSOR_FILE: .github/cache/last_cursor.txt
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
 
-      - name: Remove Old Cache
-        run: |
-          rm -rf .github/cache
+      - name: Clean up cache
+        run: rm -rf .github/cache
 
-      - name: Save New Cursor
+      - name: Cache cursor file after moderation
         uses: actions/cache@v3
         with:
           path: .github/cache
-          key: cursor-cache
+          key: cursor-cache-${{ github.sha }}
+
 ```
 
 ## Cron Expression Customization:
