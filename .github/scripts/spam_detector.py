@@ -4,7 +4,7 @@ import os
 import json
 
 GITHUB_API_URL = "https://api.github.com/graphql"
-CURSOR_FILE = ".github/spam_detector_cursor.txt"
+CURSOR_FILE = os.path.join(os.environ['GITHUB_WORKSPACE'], ".github", "spam_detector_cursor.txt")
 
 def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discussion"):
     if comment_type == "discussion":
@@ -62,6 +62,7 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
     else:
         raise Exception(f"Query failed with code {response.status_code}. Response: {response.json()}")
 
+
 def minimize_comment(comment_id, headers):
     mutation = """
     mutation($commentId: ID!) {
@@ -82,9 +83,11 @@ def minimize_comment(comment_id, headers):
         print(f"Failed to minimize comment with ID {comment_id}. Status code: {response.status_code}")
         return False
 
+
 def detect_spam(comment_body):
-    model = joblib.load("/app/spam_detector_model.pkl")  # Load new model pipeline directly
+    model = joblib.load("/app/spam_detector_model.pkl")
     return model.predict([comment_body])[0] == 1
+
 
 def load_cursor():
     try:
@@ -100,41 +103,46 @@ def save_cursor(cursors):
 
 
 def moderate_comments(owner, repo, token):
+    print(f"CURSOR_FILE inside moderate_comments: {CURSOR_FILE}")  # Debug print
     headers = {
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json'
     }
-    
+
     spam_results = []
     comment_types = ["discussion", "issue", "pullRequest"]
-    cursors = load_cursor()  # Load cursors
+    cursors = load_cursor()
 
     for comment_type in comment_types:
-        latest_cursor = cursors.get(comment_type)  # Use saved cursor
+        latest_cursor = cursors.get(comment_type)
         try:
             while True:
                 data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
-                # Check if data is valid and contains the expected structure.
-                if not data or 'data' not in data or 'repository' not in data['data']:
-                    print(f"Invalid response data for {comment_type}: {data}")  # Add more specific debugging
-                    break  # Or handle the error differently
+
+                # Data Validation (Improved)
+                if not data or 'data' not in data or 'repository' not in data['data'] or comment_type + "s" not in data['data']['repository']:
+                    print(f"Skipping {comment_type} due to invalid data.")
+                    break # breaks from the while True loop. Continues to the next comment_type if there are any more
+
+                if not data['data']['repository'][comment_type + "s"]['pageInfo']['hasNextPage']:
+                    break # Breaks from the while True loop to the next comment_type.
+
                 for entity in data['data']['repository'][comment_type + "s"]['edges']:
-                    # Similarly check for valid data here.
+                    # Entity Validation
                     if 'node' not in entity or 'comments' not in entity['node'] or 'edges' not in entity['node']['comments']:
                         print(f"Invalid entity data for {comment_type}: {entity}")
-                        continue
+                        continue # breaks from the entity loop to the next entity if available
 
                     for comment_edge in entity['node']['comments']['edges']:
-                        # and here..
+                        # Comment Validation
                         if 'node' not in comment_edge or 'id' not in comment_edge['node'] or 'body' not in comment_edge['node'] or 'isMinimized' not in comment_edge['node']:
                             print(f"Invalid comment data for {comment_type}: {comment_edge}")
-                            continue
+                            continue # breaks from the current comment loop to the next comment if available
 
                         comment_id = comment_edge['node']['id']
                         comment_body = comment_edge['node']['body']
                         is_minimized = comment_edge['node']['isMinimized']
 
-                        # Debugging outputs
                         print(f"Processing {comment_type} comment:", comment_body)
                         print("Is Minimized:", is_minimized)
                         print("Is Spam:", detect_spam(comment_body))
@@ -143,24 +151,19 @@ def moderate_comments(owner, repo, token):
                             hidden = minimize_comment(comment_id, headers)
                             spam_results.append({"id": comment_id, "hidden": hidden})
 
-                        latest_cursor = comment_edge['cursor']
+                        latest_cursor = comment_edge['cursor'] # Only place where latest_cursor is updated
 
-                    page_info = entity['node']['comments']['pageInfo']
-                    if not page_info['hasNextPage']:
-                        break
-                    cursors[comment_type] = page_info["endCursor"]  # Update cursor for current type after page
-                    save_cursor(cursors)
+                # Update and save cursor after processing all comments on the current page:
+                cursors[comment_type] = latest_cursor if latest_cursor else data['data']['repository'][comment_type + "s"]['pageInfo']['endCursor']
+                save_cursor(cursors)
 
-                if not data['data']['repository'][comment_type + "s"]['pageInfo']['hasNextPage']:
-                    cursors[comment_type] = data['data']['repository'][comment_type + "s"]['pageInfo']["endCursor"] # Final update
-                    save_cursor(cursors) # Save the final cursor for type
-                    break  # Exit the type loop
-        
+
         except Exception as e:
             print(f"Error processing {comment_type}s: " + str(e))
-    
+
     print("Moderation Results:")
     print(spam_results)
+
 
 if __name__ == "__main__":
     OWNER = os.environ.get("GITHUB_REPOSITORY_OWNER") 

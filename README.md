@@ -41,10 +41,12 @@ jobs:
       issues: write
       pull-requests: write
       discussions: write
-      contents: read 
+      contents: write 
 
     steps:
-      - uses: actions/checkout@v3  
+      - uses: actions/checkout@v3 
+        with:
+          fetch-depth: 0 
       - name: Spam Detection
         uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2 
         env:
