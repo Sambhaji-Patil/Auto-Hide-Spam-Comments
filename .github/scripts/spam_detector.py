@@ -44,7 +44,10 @@ def load_cursor(owner, repo, comment_type):
         print(f"Error loading cursor: {e}")
         return None
 
-def fetch_comments(owner, repo, headers, comment_type="discussion", after_cursor=None):
+def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discussion"):
+    """
+    Fetch comments with corrected parameter passing
+    """
     if comment_type == "discussion":
         query_field = "discussions"
         query_comments_field = "comments"
@@ -54,6 +57,8 @@ def fetch_comments(owner, repo, headers, comment_type="discussion", after_cursor
     elif comment_type == "pullRequest":
         query_field = "pullRequests"
         query_comments_field = "comments"
+    else:
+        raise ValueError(f"Invalid comment type: {comment_type}")
 
     query = f"""
     query($owner: String!, $repo: String!, $first: Int, $after: String) {{
@@ -63,7 +68,7 @@ def fetch_comments(owner, repo, headers, comment_type="discussion", after_cursor
             node {{
               id
               title
-              {query_comments_field}(first: $first, after: $after) {{
+              {query_comments_field}(first: 10, after: $after) {{
                 edges {{
                   node {{
                     id
@@ -94,7 +99,7 @@ def fetch_comments(owner, repo, headers, comment_type="discussion", after_cursor
         "after": after_cursor,
     }
     response = requests.post(GITHUB_API_URL, headers=headers, json={"query": query, "variables": variables})
-    print("Fetch Comments Response:", response.json())  # Debugging line
+    print(f"Fetch {comment_type} Comments Response:", response.json())  # Debugging line
     if response.status_code == 200:
         return response.json()
     else:
@@ -139,8 +144,13 @@ def moderate_comments(owner, repo, token):
         
         try:
             while True:
-                data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
-                for entity in data['data']['repository'][comment_type + "s"]['edges']:
+                # Pass comment_type as a parameter, not a keyword
+                data = fetch_comments(owner, repo, headers, after_cursor=latest_cursor, comment_type=comment_type)
+                
+                # Select the correct comment type in the response
+                comment_type_plural = comment_type + "s"
+                
+                for entity in data['data']['repository'][comment_type_plural]['edges']:
                     for comment_edge in entity['node']['comments']['edges']:
                         comment_id = comment_edge['node']['id']
                         comment_body = comment_edge['node']['body']
@@ -161,9 +171,11 @@ def moderate_comments(owner, repo, token):
                     if not page_info['hasNextPage']:
                         break
 
-                if not data['data']['repository'][comment_type + "s"]['pageInfo']['hasNextPage']:
+                # Check if there are more comments for the current comment type
+                if not data['data']['repository'][comment_type_plural]['pageInfo']['hasNextPage']:
                     break
-                latest_cursor = data['data']['repository'][comment_type + "s"]['pageInfo']["endCursor"]
+                
+                latest_cursor = data['data']['repository'][comment_type_plural]['pageInfo']["endCursor"]
                 
                 # Save cursor for next iteration
                 save_cursor({
