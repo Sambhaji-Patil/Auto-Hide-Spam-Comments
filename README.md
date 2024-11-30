@@ -32,7 +32,7 @@ on:
   pull_request_review_comment:
     types: [created]
   discussion_comment:
-    types: [created]  
+    types: [created]
 
 jobs:
   detect-spam:
@@ -41,12 +41,13 @@ jobs:
       issues: write
       pull-requests: write
       discussions: write
-      contents: read 
+      contents: read
 
     steps:
-      - uses: actions/checkout@v3  
+      - uses: actions/checkout@v3
 
       - name: Restore Cache
+        id: restore_cache
         uses: actions/cache@v3
         with:
           path: .github/cache
@@ -63,18 +64,20 @@ jobs:
           fi
 
       - name: Spam Detection
-        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2 
+        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURSOR_FILE: .github/cache/last_cursor.txt
 
-      - name: Save Cache
+      - name: Remove Old Cache
+        run: |
+          rm -rf .github/cache
+
+      - name: Save New Cursor
         uses: actions/cache@v3
         with:
           path: .github/cache
           key: cursor-cache
-
-
 ```
 
 ## Cron Expression Customization:

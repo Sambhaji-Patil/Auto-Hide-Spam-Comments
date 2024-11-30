@@ -87,11 +87,16 @@ def detect_spam(comment_body):
 def get_cursor_file(cursor_dir):
     return Path(cursor_dir) / "last_cursor.txt"
 
-def save_cursor(cursor, cursor_dir):
-    cursor_file_path = get_cursor_file(cursor_dir)
-    cursor_file_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(cursor_file_path, "w") as f:
-        f.write(cursor)
+def read_cursor(cursor_file):
+    if cursor_file.exists():
+        with open(cursor_file, "r") as file:
+            return file.read().strip()
+    return None
+
+def save_cursor(cursor, cursor_file):
+    cursor_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(cursor_file, "w") as file:
+        file.write(cursor)
 
 
 def moderate_comments(owner, repo, token):
@@ -102,11 +107,7 @@ def moderate_comments(owner, repo, token):
     
     cursor_dir = "/app/.github/cache"
     cursor_file = get_cursor_file(cursor_dir)
-    latest_cursor = None
-
-    if cursor_file.exists():
-        with open(cursor_file, "r") as f:
-            latest_cursor = f.read().strip()
+    latest_cursor = read_cursor(cursor_file)
 
     spam_results = []
     comment_types = ["discussion", "issue", "pullRequest"]
@@ -142,10 +143,11 @@ def moderate_comments(owner, repo, token):
         
         except Exception as e:
             print(f"Error processing {comment_type}s: " + str(e))
+            break
     
     # Save the latest cursor
     if latest_cursor:
-        save_cursor(latest_cursor, cursor_dir)
+        save_cursor(latest_cursor, cursor_file)
 
     print("Moderation Results:")
     print(spam_results)
@@ -155,15 +157,8 @@ if __name__ == "__main__":
     REPO = os.environ.get("GITHUB_REPOSITORY")
     TOKEN = os.getenv('GITHUB_TOKEN')
     
-    try:
-        repo_parts = os.environ.get("GITHUB_REPOSITORY").split("/")
-        if len(repo_parts) == 2:
-            OWNER = repo_parts[0]
-            REPO = repo_parts[1]
-        else:
-            raise ValueError("GITHUB_REPOSITORY environment variable is not in the expected 'owner/repo' format.")
-    except (AttributeError, ValueError) as e:
-        print(f"Error getting repository information: {e}")
+    if not OWNER or not REPO or not TOKEN:
+        print("Missing necessary environment variables.")
         exit(1)
 
     moderate_comments(OWNER, REPO, TOKEN)
