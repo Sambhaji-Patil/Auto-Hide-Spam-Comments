@@ -57,9 +57,7 @@ jobs:
       - name: Get Latest Cursor
         run: |
           mkdir -p .github/cache
-          if [ -f ".github/cache/last_cursor.txt" ]; then
-            echo "Found cursor file."
-          else
+          if [ ! -f ".github/cache/last_cursor.txt" ]; then
             echo "No previous cursor found. Starting fresh."
             touch .github/cache/last_cursor.txt
           fi
@@ -74,7 +72,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .github/cache
-          key: cursor-cache-${{ github.run_id }}
+          key: cursor-cache
 
 
 ```

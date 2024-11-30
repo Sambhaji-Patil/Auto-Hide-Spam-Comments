@@ -85,24 +85,14 @@ def detect_spam(comment_body):
     return model.predict([comment_body])[0] == 1
 
 def get_cursor_file(cursor_dir):
-    cursor_dir_path = Path(cursor_dir)
-    cursor_files = list(cursor_dir_path.glob("last_cursor_*.txt"))
-    if cursor_files:
-        # Sort files by modification time, latest first
-        cursor_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-        return cursor_files[0]  # Return the latest cursor file
-    else:
-        # No cursor file found, return default path
-        return cursor_dir_path / "last_cursor.txt"
+    return Path(cursor_dir) / "last_cursor.txt"
 
 def save_cursor(cursor, cursor_dir):
-    cursor_dir_path = Path(cursor_dir)
-    # Ensure the directory exists
-    cursor_dir_path.mkdir(parents=True, exist_ok=True)
-
-    cursor_file_path = cursor_dir_path / f"last_cursor_{os.getenv('GITHUB_RUN_ID')}.txt"
+    cursor_file_path = get_cursor_file(cursor_dir)
+    cursor_file_path.parent.mkdir(parents=True, exist_ok=True)
     with open(cursor_file_path, "w") as f:
         f.write(cursor)
+
 
 def moderate_comments(owner, repo, token):
     headers = {
