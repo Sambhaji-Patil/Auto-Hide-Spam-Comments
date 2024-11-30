@@ -31,6 +31,7 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
         "issue": "issues",
         "pullRequest": "pullRequests"
     }.get(comment_type, "discussions")
+
     query = f"""
     query($owner: String!, $repo: String!, $first: Int, $after: String) {{
       repository(owner: $owner, name: $repo) {{
@@ -39,7 +40,7 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
             node {{
               id
               title
-              comments(first: $first, after: $after) {{
+              comments(first: $first) {{
                 edges {{
                   node {{
                     id
@@ -71,10 +72,7 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
     }
     response = requests.post(GITHUB_API_URL, headers=headers, json={"query": query, "variables": variables})
     print("Fetch Comments Response:", response.json())
-    if response.status_code == 200:
-        return response.json()
-    else:
-        raise Exception(f"Query failed with code {response.status_code}. Response: {response.json()}")
+    return response.json()
 
 def minimize_comment(comment_id, headers):
     mutation = """
@@ -117,6 +115,13 @@ def moderate_comments(owner, repo, token):
         try:
             while True:
                 data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
+                
+                # Check for errors in the response
+                if 'errors' in data:
+                    print(f"Error in {comment_type} query: {data['errors']}")
+                    latest_cursor = None  # Reset the cursor
+                    break
+
                 comments = data['data']['repository'][comment_type + "s"]['edges']
                 
                 if not comments:
@@ -144,6 +149,7 @@ def moderate_comments(owner, repo, token):
         
         except Exception as e:
             print(f"Error processing {comment_type}s: " + str(e))
+            latest_cursor = None  # Reset the cursor on error
         
         cursor_data[comment_type] = latest_cursor
     
