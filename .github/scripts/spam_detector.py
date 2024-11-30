@@ -4,43 +4,39 @@ import os
 import json
 
 GITHUB_API_URL = "https://api.github.com/graphql"
-CACHE_DIR = '.github/cursor_cache'
-CACHE_FILE = f'{CACHE_DIR}/cursor.json'
+CACHE_FILE = '.github/cursor_cache/cursor.json'
 
 def load_cursor():
     if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Error loading cursor cache: {e}")
+        with open(CACHE_FILE, 'r') as f:
+            return json.load(f)
     return {}
 
 def save_cursor(cursor_data):
-    try:
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        with open(CACHE_FILE, 'w') as f:
-            json.dump(cursor_data, f)
-        print(f"Cursor saved: {cursor_data}")
-    except Exception as e:
-        print(f"Error saving cursor cache: {e}")
+    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+    with open(CACHE_FILE, 'w') as f:
+        json.dump(cursor_data, f)
 
 def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discussion"):
-    query_field = {
-        "discussion": "discussions",
-        "issue": "issues",
-        "pullRequest": "pullRequests"
-    }.get(comment_type, "discussions")
+    if comment_type == "discussion":
+        query_field = "discussions"
+        query_comments_field = "comments"
+    elif comment_type == "issue":
+        query_field = "issues"
+        query_comments_field = "comments"
+    elif comment_type == "pullRequest":
+        query_field = "pullRequests"
+        query_comments_field = "comments"
 
     query = f"""
     query($owner: String!, $repo: String!, $first: Int, $after: String) {{
       repository(owner: $owner, name: $repo) {{
-        {query_field}(first: 10, after: $after) {{
+        {query_field}(first: 10) {{
           edges {{
             node {{
               id
               title
-              comments(first: $first) {{
+              {query_comments_field}(first: $first, after: $after) {{
                 edges {{
                   node {{
                     id
@@ -71,8 +67,11 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
         "after": after_cursor,
     }
     response = requests.post(GITHUB_API_URL, headers=headers, json={"query": query, "variables": variables})
-    print("Fetch Comments Response:", response.json())
-    return response.json()
+    print("Fetch Comments Response:", response.json())  # Debugging line
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise Exception(f"Query failed with code {response.status_code}. Response: {response.json()}")
 
 def minimize_comment(comment_id, headers):
     mutation = """
@@ -106,28 +105,14 @@ def moderate_comments(owner, repo, token):
     
     spam_results = []
     comment_types = ["discussion", "issue", "pullRequest"]
-    
     cursor_data = load_cursor()
-    print(f"Loaded cursor data: {cursor_data}")
 
     for comment_type in comment_types:
         latest_cursor = cursor_data.get(comment_type)
         try:
             while True:
                 data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
-                
-                # Check for errors in the response
-                if 'errors' in data:
-                    print(f"Error in {comment_type} query: {data['errors']}")
-                    latest_cursor = None  # Reset the cursor
-                    break
-
-                comments = data['data']['repository'][comment_type + "s"]['edges']
-                
-                if not comments:
-                    break
-
-                for entity in comments:
+                for entity in data['data']['repository'][comment_type + "s"]['edges']:
                     for comment_edge in entity['node']['comments']['edges']:
                         comment_id = comment_edge['node']['id']
                         comment_body = comment_edge['node']['body']
@@ -143,13 +128,16 @@ def moderate_comments(owner, repo, token):
 
                         latest_cursor = comment_edge['cursor']
 
+                    page_info = entity['node']['comments']['pageInfo']
+                    if not page_info['hasNextPage']:
+                        break
+
                 if not data['data']['repository'][comment_type + "s"]['pageInfo']['hasNextPage']:
                     break
                 latest_cursor = data['data']['repository'][comment_type + "s"]['pageInfo']["endCursor"]
         
         except Exception as e:
             print(f"Error processing {comment_type}s: " + str(e))
-            latest_cursor = None  # Reset the cursor on error
         
         cursor_data[comment_type] = latest_cursor
     

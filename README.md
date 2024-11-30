@@ -46,7 +46,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .github/cursor_cache
-          key: ${{ runner.os }}-cursor-v1
+          key: ${{ runner.os }}-cursor-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-cursor-
       - name: Spam Detection
         uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2
         env:
