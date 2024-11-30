@@ -46,14 +46,36 @@ jobs:
     steps:
       - uses: actions/checkout@v3  
 
-      - name: Set Up Cursor Directory
-        run: mkdir -p .github/cursor_storage
+      - name: Restore Cache
+        uses: actions/cache@v3
+        with:
+          path: .github/cache
+          key: cursor-cache
+          restore-keys: |
+            cursor-cache-
+
+      - name: Get Latest Cursor
+        run: |
+          mkdir -p .github/cache
+          if [ -f ".github/cache/last_cursor.txt" ]; then
+            echo "Found cursor file."
+          else
+            echo "No previous cursor found. Starting fresh."
+            touch .github/cache/last_cursor.txt
+          fi
 
       - name: Spam Detection
-        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2
+        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURSOR_DIR: .github/cursor_storage
+          CURSOR_FILE: .github/cache/last_cursor.txt
+
+      - name: Save Cache
+        uses: actions/cache@v3
+        with:
+          path: .github/cache
+          key: cursor-cache-${{ github.run_id }}
+
 
 ```
 

@@ -1,7 +1,7 @@
-import os
-import time
 import joblib
 import requests
+import os
+from pathlib import Path
 
 GITHUB_API_URL = "https://api.github.com/graphql"
 
@@ -81,41 +81,43 @@ def minimize_comment(comment_id, headers):
         return False
 
 def detect_spam(comment_body):
-    model = joblib.load("/app/spam_detector_model.pkl")  
+    model = joblib.load("/app/spam_detector_model.pkl")
     return model.predict([comment_body])[0] == 1
 
-def save_cursor(cursor, base_dir):
-    timestamp = int(time.time())  
-    cursor_file_path = os.path.join(base_dir, f"cursor_{timestamp}.txt")
+def get_cursor_file(cursor_dir):
+    cursor_dir_path = Path(cursor_dir)
+    cursor_files = list(cursor_dir_path.glob("last_cursor_*.txt"))
+    if cursor_files:
+        # Sort files by modification time, latest first
+        cursor_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        return cursor_files[0]  # Return the latest cursor file
+    else:
+        # No cursor file found, return default path
+        return cursor_dir_path / "last_cursor.txt"
+
+def save_cursor(cursor, cursor_dir):
+    cursor_file_path = Path(cursor_dir) / f"last_cursor_{os.getenv('GITHUB_RUN_ID')}.txt"
     with open(cursor_file_path, "w") as f:
         f.write(cursor)
-    print(f"Saved cursor to {cursor_file_path}")
 
-def get_last_cursor(base_dir):
-    try:
-        cursor_files = sorted(
-            [f for f in os.listdir(base_dir) if f.startswith("cursor_")],
-            key=lambda x: int(x.split("_")[1].split(".")[0]),
-            reverse=True
-        )
-        if cursor_files:
-            with open(os.path.join(base_dir, cursor_files[0]), "r") as f:
-                return f.read().strip()
-    except Exception as e:
-        print(f"Error fetching last cursor: {e}")
-    return None
-
-def moderate_comments(owner, repo, token, cursor_dir):
+def moderate_comments(owner, repo, token):
     headers = {
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json'
     }
     
+    cursor_dir = "/app/.github/cache"
+    cursor_file = get_cursor_file(cursor_dir)
+    latest_cursor = None
+
+    if cursor_file.exists():
+        with open(cursor_file, "r") as f:
+            latest_cursor = f.read().strip()
+
     spam_results = []
     comment_types = ["discussion", "issue", "pullRequest"]
 
     for comment_type in comment_types:
-        latest_cursor = get_last_cursor(cursor_dir)
         try:
             while True:
                 data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
@@ -134,8 +136,8 @@ def moderate_comments(owner, repo, token, cursor_dir):
                             hidden = minimize_comment(comment_id, headers)
                             spam_results.append({"id": comment_id, "hidden": hidden})
 
+                        # Update cursor
                         latest_cursor = comment_edge['cursor']
-                        save_cursor(latest_cursor, cursor_dir)
 
                     page_info = entity['node']['comments']['pageInfo']
                     if not page_info['hasNextPage']:
@@ -147,14 +149,27 @@ def moderate_comments(owner, repo, token, cursor_dir):
         except Exception as e:
             print(f"Error processing {comment_type}s: " + str(e))
     
+    # Save the latest cursor
+    if latest_cursor:
+        save_cursor(latest_cursor, cursor_dir)
+
     print("Moderation Results:")
     print(spam_results)
 
 if __name__ == "__main__":
-    OWNER = os.environ.get("GITHUB_REPOSITORY_OWNER") 
-    REPO = os.environ.get("GITHUB_REPOSITORY")          
+    OWNER = os.environ.get("GITHUB_REPOSITORY_OWNER")
+    REPO = os.environ.get("GITHUB_REPOSITORY")
     TOKEN = os.getenv('GITHUB_TOKEN')
-    CURSOR_DIR = os.getenv("CURSOR_DIR", "/app/cursor_storage")
-    os.makedirs(CURSOR_DIR, exist_ok=True)
+    
+    try:
+        repo_parts = os.environ.get("GITHUB_REPOSITORY").split("/")
+        if len(repo_parts) == 2:
+            OWNER = repo_parts[0]
+            REPO = repo_parts[1]
+        else:
+            raise ValueError("GITHUB_REPOSITORY environment variable is not in the expected 'owner/repo' format.")
+    except (AttributeError, ValueError) as e:
+        print(f"Error getting repository information: {e}")
+        exit(1)
 
-    moderate_comments(OWNER, REPO, TOKEN, CURSOR_DIR)
+    moderate_comments(OWNER, REPO, TOKEN)
