@@ -2,21 +2,10 @@ import joblib
 import requests
 import os
 import json
-import glob
 
 GITHUB_API_URL = "https://api.github.com/graphql"
 CACHE_DIR = '.github/cursor_cache'
 CACHE_FILE = f'{CACHE_DIR}/cursor.json'
-
-def clean_old_caches():
-    """Remove all old cache files before saving new one"""
-    if os.path.exists(CACHE_DIR):
-        cache_files = glob.glob(f'{CACHE_DIR}/*')
-        for f in cache_files:
-            try:
-                os.remove(f)
-            except Exception as e:
-                print(f"Error removing old cache file {f}: {e}")
 
 def load_cursor():
     if os.path.exists(CACHE_FILE):
@@ -29,38 +18,28 @@ def load_cursor():
 
 def save_cursor(cursor_data):
     try:
-        # Clean old cache files first
-        clean_old_caches()
-        
-        # Create cache directory if it doesn't exist
         os.makedirs(CACHE_DIR, exist_ok=True)
-        
-        # Save new cache file
         with open(CACHE_FILE, 'w') as f:
             json.dump(cursor_data, f)
+        print(f"Cursor saved: {cursor_data}")
     except Exception as e:
         print(f"Error saving cursor cache: {e}")
 
 def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discussion"):
-    if comment_type == "discussion":
-        query_field = "discussions"
-        query_comments_field = "comments"
-    elif comment_type == "issue":
-        query_field = "issues"
-        query_comments_field = "comments"
-    elif comment_type == "pullRequest":
-        query_field = "pullRequests"
-        query_comments_field = "comments"
-
+    query_field = {
+        "discussion": "discussions",
+        "issue": "issues",
+        "pullRequest": "pullRequests"
+    }.get(comment_type, "discussions")
     query = f"""
     query($owner: String!, $repo: String!, $first: Int, $after: String) {{
       repository(owner: $owner, name: $repo) {{
-        {query_field}(first: 10) {{
+        {query_field}(first: 10, after: $after) {{
           edges {{
             node {{
               id
               title
-              {query_comments_field}(first: $first, after: $after) {{
+              comments(first: $first, after: $after) {{
                 edges {{
                   node {{
                     id
@@ -91,7 +70,7 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
         "after": after_cursor,
     }
     response = requests.post(GITHUB_API_URL, headers=headers, json={"query": query, "variables": variables})
-    print("Fetch Comments Response:", response.json())  # Debugging line
+    print("Fetch Comments Response:", response.json())
     if response.status_code == 200:
         return response.json()
     else:
@@ -129,14 +108,21 @@ def moderate_comments(owner, repo, token):
     
     spam_results = []
     comment_types = ["discussion", "issue", "pullRequest"]
+    
     cursor_data = load_cursor()
+    print(f"Loaded cursor data: {cursor_data}")
 
     for comment_type in comment_types:
         latest_cursor = cursor_data.get(comment_type)
         try:
             while True:
                 data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
-                for entity in data['data']['repository'][comment_type + "s"]['edges']:
+                comments = data['data']['repository'][comment_type + "s"]['edges']
+                
+                if not comments:
+                    break
+
+                for entity in comments:
                     for comment_edge in entity['node']['comments']['edges']:
                         comment_id = comment_edge['node']['id']
                         comment_body = comment_edge['node']['body']
@@ -151,10 +137,6 @@ def moderate_comments(owner, repo, token):
                             spam_results.append({"id": comment_id, "hidden": hidden})
 
                         latest_cursor = comment_edge['cursor']
-
-                    page_info = entity['node']['comments']['pageInfo']
-                    if not page_info['hasNextPage']:
-                        break
 
                 if not data['data']['repository'][comment_type + "s"]['pageInfo']['hasNextPage']:
                     break
