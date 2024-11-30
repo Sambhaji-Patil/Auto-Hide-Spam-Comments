@@ -2,40 +2,22 @@ import joblib
 import requests
 import os
 import json
-import hashlib
-import sys
 
 GITHUB_API_URL = "https://api.github.com/graphql"
-CURSOR_CACHE_KEY = "spam-detection-cursor"
+CACHE_FILE = '.github/cursor_cache/cursor.json'
 
-def save_cursor_to_cache(owner, repo, comment_type, cursor):
-    """Save cursor data to GitHub Actions cache."""
-    try:
-        # Prepare cursor data
-        cursor_data = {
-            'owner': owner,
-            'repo': repo,
-            'comment_type': comment_type,
-            'cursor': cursor
-        }
-        
-        # Convert to JSON string
-        cursor_json = json.dumps(cursor_data)
-        
-        # Write to a temporary file
-        with open('/tmp/cursor_cache.json', 'w') as f:
-            f.write(cursor_json)
-        
-        print(f"Cursor prepared for caching: {cursor_data}")
-        return True
-    except Exception as e:
-        print(f"Error preparing cursor for cache: {e}")
-        return False
+def load_cursor():
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_cursor(cursor_data):
+    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+    with open(CACHE_FILE, 'w') as f:
+        json.dump(cursor_data, f)
 
 def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discussion"):
-    """
-    Fetch comments with corrected parameter passing
-    """
     if comment_type == "discussion":
         query_field = "discussions"
         query_comments_field = "comments"
@@ -45,8 +27,6 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
     elif comment_type == "pullRequest":
         query_field = "pullRequests"
         query_comments_field = "comments"
-    else:
-        raise ValueError(f"Invalid comment type: {comment_type}")
 
     query = f"""
     query($owner: String!, $repo: String!, $first: Int, $after: String) {{
@@ -56,7 +36,7 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
             node {{
               id
               title
-              {query_comments_field}(first: 10, after: $after) {{
+              {query_comments_field}(first: $first, after: $after) {{
                 edges {{
                   node {{
                     id
@@ -87,7 +67,7 @@ def fetch_comments(owner, repo, headers, after_cursor=None, comment_type="discus
         "after": after_cursor,
     }
     response = requests.post(GITHUB_API_URL, headers=headers, json={"query": query, "variables": variables})
-    print(f"Fetch {comment_type} Comments Response:", response.json())  # Debugging line
+    print("Fetch Comments Response:", response.json())  # Debugging line
     if response.status_code == 200:
         return response.json()
     else:
@@ -125,26 +105,19 @@ def moderate_comments(owner, repo, token):
     
     spam_results = []
     comment_types = ["discussion", "issue", "pullRequest"]
+    cursor_data = load_cursor()
 
     for comment_type in comment_types:
-        # Try to load existing cursor from cache file if exists
-        latest_cursor = None
-        
+        latest_cursor = cursor_data.get(comment_type)
         try:
             while True:
-                # Pass comment_type as a parameter, not a keyword
-                data = fetch_comments(owner, repo, headers, after_cursor=latest_cursor, comment_type=comment_type)
-                
-                # Select the correct comment type in the response
-                comment_type_plural = comment_type + "s"
-                
-                for entity in data['data']['repository'][comment_type_plural]['edges']:
+                data = fetch_comments(owner, repo, headers, latest_cursor, comment_type=comment_type)
+                for entity in data['data']['repository'][comment_type + "s"]['edges']:
                     for comment_edge in entity['node']['comments']['edges']:
                         comment_id = comment_edge['node']['id']
                         comment_body = comment_edge['node']['body']
                         is_minimized = comment_edge['node']['isMinimized']
 
-                        # Debugging outputs
                         print(f"Processing {comment_type} comment:", comment_body)
                         print("Is Minimized:", is_minimized)
                         print("Is Spam:", detect_spam(comment_body))
@@ -159,35 +132,34 @@ def moderate_comments(owner, repo, token):
                     if not page_info['hasNextPage']:
                         break
 
-                # Check if there are more comments for the current comment type
-                if not data['data']['repository'][comment_type_plural]['pageInfo']['hasNextPage']:
+                if not data['data']['repository'][comment_type + "s"]['pageInfo']['hasNextPage']:
                     break
-                
-                latest_cursor = data['data']['repository'][comment_type_plural]['pageInfo']["endCursor"]
-                
-                # Save cursor to a file for GitHub Actions cache
-                save_cursor_to_cache(owner, repo, comment_type, latest_cursor)
+                latest_cursor = data['data']['repository'][comment_type + "s"]['pageInfo']["endCursor"]
         
         except Exception as e:
             print(f"Error processing {comment_type}s: " + str(e))
+        
+        cursor_data[comment_type] = latest_cursor
+    
+    save_cursor(cursor_data)
     
     print("Moderation Results:")
     print(spam_results)
 
 if __name__ == "__main__":
-    OWNER = os.environ.get("GITHUB_REPOSITORY_OWNER") 
-    REPO = os.environ.get("GITHUB_REPOSITORY")          
-    TOKEN = os.getenv('GITHUB_TOKEN') 
+    OWNER = os.environ.get("GITHUB_REPOSITORY_OWNER")
+    REPO = os.environ.get("GITHUB_REPOSITORY")
+    TOKEN = os.getenv('GITHUB_TOKEN')
     
     try:
-        repo_parts = os.environ.get("GITHUB_REPOSITORY").split("/")  
-        if len(repo_parts) == 2:  
+        repo_parts = os.environ.get("GITHUB_REPOSITORY").split("/")
+        if len(repo_parts) == 2:
             OWNER = repo_parts[0]
             REPO = repo_parts[1]
         else:
             raise ValueError("GITHUB_REPOSITORY environment variable is not in the expected 'owner/repo' format.")
     except (AttributeError, ValueError) as e:
         print(f"Error getting repository information: {e}")
-        exit(1)  
+        exit(1)
 
     moderate_comments(OWNER, REPO, TOKEN)

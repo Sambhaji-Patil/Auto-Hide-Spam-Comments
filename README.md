@@ -31,7 +31,7 @@ on:
   pull_request_review_comment:
     types: [created]
   discussion_comment:
-    types: [created]  
+    types: [created]
 jobs:
   detect-spam:
     runs-on: ubuntu-latest
@@ -39,32 +39,20 @@ jobs:
       issues: write
       pull-requests: write
       discussions: write
-      contents: read 
-      actions: write  # Important: needed for cache access
+      contents: read
     steps:
       - uses: actions/checkout@v3
-      
-      # Restore cursor cache before running the spam detection
-      - name: Restore Cursor Cache
-        uses: actions/cache/restore@v3
-        id: restore-cursor
+      - name: Cache cursor
+        uses: actions/cache@v3
         with:
-          path: /tmp/cursor_cache.json
-          key: ${{ runner.os }}-spam-detection-cursor
+          path: .github/cursor_cache
+          key: ${{ runner.os }}-cursor-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-spam-detection-cursor
-      
+            ${{ runner.os }}-cursor-
       - name: Spam Detection
-        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2 
+        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      # Save cursor cache after running spam detection
-      - name: Save Cursor Cache
-        uses: actions/cache/save@v3
-        with:
-          path: /tmp/cursor_cache.json
-          key: ${{ runner.os }}-spam-detection-cursor-${{ github.sha }}
 ```
 
 ## Cron Expression Customization:
