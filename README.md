@@ -22,16 +22,11 @@ This action hides spam comments directly in the repository's issues, discussions
 To use this action in your repository, add the following to your workflow file (e.g., `.github/workflows/spam-detection.yml`).
 
 ## Select Any 1 from the workflows below 
-### Workflow 1: This will work every time a new comment is commented in Issues/Discussions/Pull Requests.
+### Workflow 1: Workflow Dispatch allows you to start the action manually.
 ```yaml
 name: Spam Detection
 on:
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
-  discussion_comment:
-    types: [created]
+  workflow_dispatch:
 jobs:
   detect-spam:
     runs-on: ubuntu-latest
