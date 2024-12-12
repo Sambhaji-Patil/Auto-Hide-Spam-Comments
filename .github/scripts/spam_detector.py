@@ -94,7 +94,7 @@ def minimize_comment(comment_id, headers):
         return False
 
 def detect_spam(comment_body):
-    model = joblib.load("/app/spam_detector_model.pkl")  # Load new model pipeline directly
+    model = joblib.load("/app/spam_detector_model_v2.pkl")  # Load new model pipeline directly
     return model.predict([comment_body])[0] == 1
 
 def moderate_comments(owner, repo, token):
