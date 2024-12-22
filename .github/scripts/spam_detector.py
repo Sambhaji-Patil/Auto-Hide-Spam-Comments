@@ -4,6 +4,7 @@ import os
 import json
 
 GITHUB_API_URL = "https://api.github.com/graphql"
+PREDICT_API_URL = "https://spam-comment-detector-api.onrender.com"
 CACHE_FILE = '.github/cursor_cache/cursor.json'
 
 def load_cursor():
@@ -94,8 +95,12 @@ def minimize_comment(comment_id, headers):
         return False
 
 def detect_spam(comment_body):
-    model = joblib.load("/app/spam_detector_model_v2.pkl")  # Load new model pipeline directly
-    return model.predict([comment_body])[0] == 1
+    response = requests.post(f"{PREDICT_API_URL}/predict", json={"comment_body": comment_body})
+    if response.status_code == 200:
+        return response.json().get("is_spam", False)
+    else:
+        print("API Error:", response.json())
+        return False
 
 def moderate_comments(owner, repo, token):
     headers = {
