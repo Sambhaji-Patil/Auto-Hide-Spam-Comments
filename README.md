@@ -45,7 +45,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cursor-
       - name: Spam Detection
-        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.3
+        uses: Sambhaji-Patil/Auto-Hide-Spam-Comments@v1.4
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
