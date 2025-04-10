@@ -94,13 +94,18 @@ def minimize_comment(comment_id, headers):
         print(f"Failed to minimize comment with ID {comment_id}. Status code: {response.status_code}")
         return False
 
-def detect_spam(comment_body):
-    response = requests.post(f"{PREDICT_API_URL}/predict", json={"comment_body": comment_body})
+def detect_spam(comment_body, github_username):
+    payload = {
+        "comment_body": comment_body,
+        "github_username": github_username
+    }
+    response = requests.post(f"{PREDICT_API_URL}/predict", json=payload)
     if response.status_code == 200:
         return response.json().get("is_spam", False)
     else:
         print("API Error:", response.json())
         return False
+
 
 def moderate_comments(owner, repo, token):
     headers = {
@@ -125,9 +130,9 @@ def moderate_comments(owner, repo, token):
 
                         print(f"Processing {comment_type} comment:", comment_body)
                         print("Is Minimized:", is_minimized)
-                        print("Is Spam:", detect_spam(comment_body))
+                        print("Is Spam:", detect_spam(comment_body, owner))
 
-                        if not is_minimized and detect_spam(comment_body):
+                        if not is_minimized and detect_spam(comment_body,owner):
                             hidden = minimize_comment(comment_id, headers)
                             spam_results.append({"id": comment_id, "hidden": hidden})
 
