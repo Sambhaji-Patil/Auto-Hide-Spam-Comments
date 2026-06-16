@@ -4,7 +4,7 @@ import os
 import json
 
 GITHUB_API_URL = "https://api.github.com/graphql"
-PREDICT_API_URL = "https://spam-comment-detector-api.onrender.com"
+PREDICT_API_URL = "https://quantumbit-gitspam-detect-api.hf.space/predict"
 CACHE_FILE = '.github/cursor_cache/cursor.json'
 
 def load_cursor():
@@ -96,12 +96,12 @@ def minimize_comment(comment_id, headers):
 
 def detect_spam(comment_body, github_username):
     payload = {
-        "comment_body": comment_body,
+        "text": comment_body,
         "github_username": github_username
     }
     response = requests.post(f"{PREDICT_API_URL}/predict", json=payload)
     if response.status_code == 200:
-        return response.json().get("is_spam", False)
+        return response.json().get("prediction")
     else:
         print("API Error:", response.json())
         return False
