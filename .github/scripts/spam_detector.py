@@ -4,7 +4,7 @@ import os
 import json
 
 GITHUB_API_URL = "https://api.github.com/graphql"
-PREDICT_API_URL = "https://quantumbit-gitspam-detect-api.hf.space/predict"
+PREDICT_API_URL = "https://quantumbit-gitspam-detect-api.hf.space"
 CACHE_FILE = '.github/cursor_cache/cursor.json'
 
 def load_cursor():
